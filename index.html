@@ -1646,11 +1646,13 @@
       toast('Isi Client Secret juga — mode testing butuh keduanya', true);
       return;
     }
-    await idbSet('gh_oauth_client_id', clientId); // Client ID only — not secret, safe to persist
-    // Secret goes in sessionStorage: cleared when the tab closes, never written to IndexedDB.
+    await idbSet('gh_oauth_client_id', clientId);
     sessionStorage.setItem('gitpush_oauth_secret_temp', clientSecret);
     const redirectUri = window.location.origin + window.location.pathname;
-    const state = Math.random().toString(36).slice(2);
+    // Pakai crypto.getRandomValues — lebih aman dari Math.random()
+    const stateArr = new Uint8Array(16);
+    crypto.getRandomValues(stateArr);
+    const state = Array.from(stateArr).map(b => b.toString(16).padStart(2,'0')).join('');
     sessionStorage.setItem('gitpush_oauth_state', state);
     const authUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&scope=repo&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
     window.location.href = authUrl;
@@ -1663,7 +1665,7 @@
     if(!code) return false;
 
     const savedState = sessionStorage.getItem('gitpush_oauth_state');
-    if(state !== savedState){
+    if(!savedState || state !== savedState){
       toast('State tidak cocok, coba login ulang', true);
       window.history.replaceState({}, '', window.location.pathname);
       return false;
@@ -1672,7 +1674,7 @@
 
     const clientId = await idbGet('gh_oauth_client_id');
     const clientSecret = sessionStorage.getItem('gitpush_oauth_secret_temp');
-    sessionStorage.removeItem('gitpush_oauth_secret_temp'); // use once, then wipe immediately
+    sessionStorage.removeItem('gitpush_oauth_secret_temp');
     window.history.replaceState({}, '', window.location.pathname);
 
     toast('Menyelesaikan login…');
@@ -1685,10 +1687,13 @@
       const data = await res.json();
       if(!res.ok || !data.access_token) throw new Error(data.error || 'Gagal ambil token');
 
+      // Validasi access_token langsung ke GitHub sebelum disimpan
       const userRes = await fetch('https://api.github.com/user', {
         headers: { 'Authorization': 'Bearer ' + data.access_token, 'Accept': 'application/vnd.github+json' }
       });
+      if(!userRes.ok) throw new Error('Token diterima tapi gagal verifikasi ke GitHub (' + userRes.status + ')');
       const user = await userRes.json();
+      if(!user.login) throw new Error('Respons user tidak valid dari GitHub');
 
       await idbSet('gh_token', data.access_token);
       await idbSet('gh_user', user);
@@ -1706,8 +1711,27 @@
     const handledOAuth = await handleOAuthCallback();
     if(handledOAuth) return;
     const savedToken = await idbGet('gh_token');
-    const savedUser = await idbGet('gh_user');
-    if(savedToken && savedUser){
+    const savedUser  = await idbGet('gh_user');
+    if(!savedToken || !savedUser) return;
+
+    // Validasi token masih aktif sebelum masuk dashboard.
+    // Kalau langsung enterDashboard tanpa cek, token expired
+    // bikin semua API call gagal dengan error membingungkan.
+    try{
+      const check = await fetch('https://api.github.com/user', {
+        headers: { 'Authorization': 'Bearer ' + savedToken, 'Accept': 'application/vnd.github+json' }
+      });
+      if(!check.ok){
+        // Token expired atau dicabut — hapus dan minta login ulang
+        await idbDel('gh_token');
+        await idbDel('gh_user');
+        toast('Sesi sebelumnya kedaluwarsa, silakan login ulang', true);
+        return;
+      }
+      // Token masih valid, pakai data user yang sudah tersimpan
+      enterDashboard(savedToken, savedUser);
+    }catch{
+      // Offline atau network error — masuk dashboard saja, biar gagal saat API dipanggil
       enterDashboard(savedToken, savedUser);
     }
   })();
