@@ -1,63 +1,46 @@
-// api/oauth-callback.js
-// Vercel serverless function.
-// This is the ONLY piece of this project that runs on a server.
-// Its single job: take the temporary "code" GitHub sends back after login,
-// and exchange it for an access_token using the Client Secret.
-//
-// TESTING MODE: this version accepts client_id/client_secret in the request
-// body, sent from the browser's input fields. This still keeps the Secret
-// out of the page's SOURCE CODE, but it does travel through this server on
-// every request — fine for solo testing, not for a public multi-user tool.
-// For a public deployment, remove the body fallback below and rely only on
-// process.env.GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET set in Vercel.
+// api/oauth-callback.js — Vercel Serverless Function
 
 export default async function handler(req, res) {
-  // Allow the browser page to call this endpoint
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { code, client_id: bodyClientId, client_secret: bodyClientSecret } = req.body || {};
-  if (!code) {
-    return res.status(400).json({ error: 'Missing code' });
-  }
+  if (!code) return res.status(400).json({ error: 'Missing code' });
 
-  // Prefer server env vars if set; otherwise fall back to what the browser sent (testing mode).
-  const client_id = process.env.GITHUB_CLIENT_ID || bodyClientId;
+  // Kalau env var sudah di-set di server, JANGAN pakai nilai dari body.
+  // Ini cegah siapapun kirim secret arbitrary ke endpoint ini.
+  const client_id     = process.env.GITHUB_CLIENT_ID     || bodyClientId;
   const client_secret = process.env.GITHUB_CLIENT_SECRET || bodyClientSecret;
 
+  // Kalau env var sudah ada tapi body masih kirim secret, tolak —
+  // berarti ada yang coba override secret server dengan secret mereka sendiri.
+  if (process.env.GITHUB_CLIENT_SECRET && bodyClientSecret) {
+    return res.status(400).json({ error: 'Server sudah dikonfigurasi dengan env var, tidak perlu kirim secret lewat body' });
+  }
+
   if (!client_id || !client_secret) {
-    return res.status(500).json({ error: 'Client ID / Secret tidak ada — isi di env var server atau kolom halaman' });
+    return res.status(500).json({ error: 'Client ID / Secret tidak ada — set env var GITHUB_CLIENT_ID dan GITHUB_CLIENT_SECRET di Vercel Dashboard' });
   }
 
   try {
     const ghRes = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ client_id, client_secret, code })
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ client_id, client_secret, code }),
     });
 
+    if (!ghRes.ok) return res.status(502).json({ error: `GitHub merespons ${ghRes.status}` });
+
     const data = await ghRes.json();
+    if (data.error) return res.status(400).json({ error: data.error_description || data.error });
 
-    if (data.error) {
-      return res.status(400).json({ error: data.error_description || data.error });
-    }
-
-    // Return only the access token to the browser — nothing else sensitive.
+    // Hanya kirim access_token — tidak ada field lain
     return res.status(200).json({ access_token: data.access_token });
   } catch (err) {
     return res.status(500).json({ error: 'Gagal menghubungi GitHub: ' + err.message });
   }
 }
-
