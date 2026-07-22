@@ -431,7 +431,10 @@
     margin-bottom:7px;
     font-family:var(--mono);
     font-size:12px;
+    position:relative;
   }
+  .fitem.dragging{ opacity:0.4; }
+  .fitem.drag-over{ border-color:var(--green); background:rgba(57,211,83,0.05); }
   .fitem .fname{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
   .fitem .fsize{ color:var(--text-dimmer); font-size:11px; }
   .fitem .frm{ color:var(--text-dimmer); cursor:pointer; padding:2px 6px; }
@@ -494,13 +497,6 @@
   .log-meta{ color:var(--text-dimmer); font-size:10.5px; margin-top:2px; }
   .log-link{ color:#7AA2F7; text-decoration:none; }
   .log-link:hover{ text-decoration:underline; }
-
-  .progress-bar{
-    height:3px; background:var(--border); border-radius:2px; overflow:hidden; margin-top:6px;
-  }
-  .progress-fill{
-    height:100%; background:var(--green); width:0%; transition:width .3s;
-  }
 
   .toast{
     position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
@@ -591,9 +587,6 @@
   .modal-actions{ display:flex; gap:8px; margin-top:14px; }
 
   /* ---------- FILE ITEM ENHANCED ---------- */
-  .fitem{ position:relative; }
-  .fitem.dragging{ opacity:0.4; }
-  .fitem.drag-over{ border-color:var(--green); background:rgba(57,211,83,0.05); }
   .fdrag{ cursor:grab; color:var(--text-dimmer); padding:2px 4px; font-size:14px; flex-shrink:0; }
   .fdrag:active{ cursor:grabbing; }
   .fedit{
@@ -621,7 +614,25 @@
   .btn-sm:hover{ border-color:var(--green); color:var(--green-bright); }
   .btn-sm.dl-zip:hover{ border-color:#7AA2F7; color:#7AA2F7; }
 
-  /* ---------- LOG META ACTIONS ---------- */
+  /* ---------- PULL REQUEST ---------- */
+  .pr-row{
+    display:flex; align-items:flex-start; gap:10px;
+    padding:10px 13px; cursor:pointer; transition:background .12s;
+    font-family:var(--mono);
+  }
+  .pr-row:hover{ background:rgba(255,255,255,0.03); }
+  .pr-row + .pr-row{ border-top:1px solid var(--border); }
+  .pr-num{ color:var(--text-dimmer); font-size:11px; flex-shrink:0; padding-top:1px; }
+  .pr-info{ flex:1; min-width:0; }
+  .pr-title{ font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pr-meta{ font-size:10.5px; color:var(--text-dimmer); margin-top:2px; }
+  .pr-state{
+    flex-shrink:0; font-size:10px; padding:2px 7px; border-radius:10px; font-weight:700;
+  }
+  .pr-state.open{ background:rgba(57,211,83,0.12); color:var(--green-bright); border:1px solid rgba(57,211,83,0.3); }
+  .pr-state.closed{ background:rgba(248,81,73,0.1); color:var(--red); border:1px solid rgba(248,81,73,0.25); }
+  .pr-state.merged{ background:rgba(122,162,247,0.12); color:#7AA2F7; border:1px solid rgba(122,162,247,0.3); }
+
   .log-actions{ display:inline-flex; gap:6px; margin-left:4px; }
   .log-act{
     color:var(--text-dimmer); cursor:pointer; font-size:11px;
@@ -735,6 +746,18 @@
           <select class="rp" id="repoSelect"><option>Memuat repo…</option></select>
         </div>
 
+        <!-- Info bar repo yang dipilih -->
+        <div id="repoInfoBar" style="display:none; background:var(--bg-raised); border:1px solid var(--border); border-radius:9px; padding:10px 13px; margin:-6px 0 14px; display:none; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span id="repoVisIcon" style="font-size:15px;"></span>
+          <span id="repoVisLabel" style="font-family:var(--mono); font-size:12px; color:var(--text); flex:1;"></span>
+          <a id="repoGhLink" href="#" target="_blank" rel="noopener" style="font-family:var(--mono); font-size:11px; color:var(--text-dimmer); text-decoration:none;">lihat di GitHub ↗</a>
+          <button id="repoVisToggleBtn" style="
+            flex:0 0 auto; font-family:var(--mono); font-size:11px; cursor:pointer;
+            border-radius:5px; padding:4px 10px; border:1px solid var(--border-bright);
+            background:var(--bg-panel); color:var(--text-dim); transition:all .15s;
+          ">ubah visibility</button>
+        </div>
+
         <div id="newRepoToggle" style="margin:-6px 0 16px;">
           <a href="#" id="showNewRepoBtn" style="font-size:12.5px; color:var(--text-dim); text-decoration:none; font-family:var(--mono); display:inline-flex; align-items:center; gap:5px;">
             <span style="color:var(--green-bright);">+</span> Buat repository baru
@@ -749,6 +772,51 @@
           <div class="field">
             <label>Deskripsi (opsional)</label>
             <input type="text" id="newRepoDesc" placeholder="Deskripsi singkat...">
+          </div>
+          <div class="field">
+            <label>Lisensi (opsional)</label>
+            <select id="newRepoLicense" class="rp">
+              <option value="">Tanpa lisensi</option>
+              <option value="mit">MIT License</option>
+              <option value="apache-2.0">Apache 2.0</option>
+              <option value="gpl-3.0">GPL v3</option>
+              <option value="gpl-2.0">GPL v2</option>
+              <option value="lgpl-2.1">LGPL v2.1</option>
+              <option value="bsd-2-clause">BSD 2-Clause</option>
+              <option value="bsd-3-clause">BSD 3-Clause</option>
+              <option value="mpl-2.0">Mozilla Public 2.0</option>
+              <option value="agpl-3.0">AGPL v3</option>
+              <option value="unlicense">The Unlicense</option>
+              <option value="cc0-1.0">CC0 1.0 (Public Domain)</option>
+              <option value="isc">ISC License</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>.gitignore template (opsional)</label>
+            <select id="newRepoGitignore" class="rp">
+              <option value="">Tanpa .gitignore</option>
+              <option value="Node">Node.js</option>
+              <option value="Python">Python</option>
+              <option value="Java">Java</option>
+              <option value="Go">Go</option>
+              <option value="Rust">Rust</option>
+              <option value="C++">C++</option>
+              <option value="C">C</option>
+              <option value="Ruby">Ruby</option>
+              <option value="Swift">Swift</option>
+              <option value="Kotlin">Kotlin</option>
+              <option value="PHP">PHP</option>
+              <option value="Laravel">Laravel</option>
+              <option value="Vue">Vue</option>
+              <option value="React">React (via Node)</option>
+              <option value="Android">Android</option>
+              <option value="Unity">Unity</option>
+              <option value="VisualStudio">Visual Studio</option>
+              <option value="Xcode">Xcode</option>
+              <option value="macOS">macOS</option>
+              <option value="Windows">Windows</option>
+              <option value="Linux">Linux</option>
+            </select>
           </div>
           <div class="field" style="margin-bottom:12px;">
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; text-transform:none; font-size:12.5px;">
@@ -784,6 +852,16 @@
           <div class="browser-row" style="cursor:default; color:var(--text-dimmer);">Pilih repo untuk lihat isinya</div>
         </div>
         <div id="editorWrap" class="hidden"></div>
+
+        <!-- Pull Requests -->
+        <div id="prSection" style="display:none; margin-bottom:6px;">
+          <div class="sec-label" style="display:flex; align-items:center; gap:8px;">
+            pull requests
+            <span id="prBadge" style="background:rgba(122,162,247,0.15); color:#7AA2F7; border:1px solid rgba(122,162,247,0.3); border-radius:10px; font-size:10px; padding:1px 7px; font-weight:700;"></span>
+            <button id="prRefreshBtn" style="margin-left:auto; background:none; border:none; color:var(--text-dimmer); cursor:pointer; font-size:11px; font-family:var(--mono);">↻ refresh</button>
+          </div>
+          <div id="prList" class="browser" style="margin-bottom:6px;"></div>
+        </div>
 
         <!-- Download repo bar -->
         <div class="dl-bar" id="dlBar" style="display:none;">
@@ -916,10 +994,6 @@
   }
 
   // ---------------- Config ----------------
-  // Client ID DIISI USER lewat kolom di halaman (bukan hardcode) — karena tiap
-  // user yang mau OAuth pribadi butuh OAuth App GitHub-nya sendiri, dan Client Secret
-  // App itu wajib ada di backend App itu sendiri (lihat api/oauth-callback.js).
-  // Kalau user beda deploy-an backend-nya sendiri, ganti OAUTH_BACKEND_URL di bawah.
   const OAUTH_BACKEND_URL = window.location.origin + '/api/oauth-callback';
 
   // ---------------- UI refs ----------------
@@ -949,10 +1023,12 @@
   const repoSelect = document.getElementById('repoSelect');
   const showNewRepoBtn = document.getElementById('showNewRepoBtn');
   const newRepoForm = document.getElementById('newRepoForm');
-  const newRepoName = document.getElementById('newRepoName');
-  const newRepoDesc = document.getElementById('newRepoDesc');
-  const newRepoPrivate = document.getElementById('newRepoPrivate');
-  const createRepoBtn = document.getElementById('createRepoBtn');
+  const newRepoName     = document.getElementById('newRepoName');
+  const newRepoDesc     = document.getElementById('newRepoDesc');
+  const newRepoPrivate  = document.getElementById('newRepoPrivate');
+  const newRepoLicense  = document.getElementById('newRepoLicense');
+  const newRepoGitignore = document.getElementById('newRepoGitignore');
+  const createRepoBtn   = document.getElementById('createRepoBtn');
   const cancelNewRepoBtn = document.getElementById('cancelNewRepoBtn');
   const branchSelect = document.getElementById('branchSelect');
   const newBranchBtn = document.getElementById('newBranchBtn');
@@ -974,7 +1050,12 @@
   const commitLog = document.getElementById('commitLog');
   const historyLog = document.getElementById('historyLog');
   const toastEl = document.getElementById('toast');
-  const imgDropZone = document.getElementById('imgDropZone');
+  const repoInfoBar       = document.getElementById('repoInfoBar');
+  const repoVisIcon       = document.getElementById('repoVisIcon');
+  const repoVisLabel      = document.getElementById('repoVisLabel');
+  const repoGhLink        = document.getElementById('repoGhLink');
+  const repoVisToggleBtn  = document.getElementById('repoVisToggleBtn');
+  const imgDropZone       = document.getElementById('imgDropZone');
   const imgFileInput = document.getElementById('imgFileInput');
   const imgResultList = document.getElementById('imgResultList');
   const dlBar = document.getElementById('dlBar');
@@ -985,6 +1066,54 @@
   const renameConfirmBtn = document.getElementById('renameConfirmBtn');
   const renameCancelBtn = document.getElementById('renameCancelBtn');
   let _renameCtx = null;
+  const prSection    = document.getElementById('prSection');
+  const prList       = document.getElementById('prList');
+  const prBadge      = document.getElementById('prBadge');
+  const prRefreshBtn = document.getElementById('prRefreshBtn');
+
+  // ---------------- Pull Requests ----------------
+  async function loadPRs(repoFull){
+    prList.innerHTML = '<div class="browser-row" style="cursor:default;color:var(--text-dimmer);">⏳ Memuat pull requests…</div>';
+    prSection.style.display = 'block';
+    const [owner, repo] = repoFull.split('/');
+    try{
+      const [openRes, closedRes] = await Promise.all([
+        fetch(`https://api.github.com/repos/${owner}/${repo}/pulls?state=open&per_page=30`, { headers: ghHeaders() }),
+        fetch(`https://api.github.com/repos/${owner}/${repo}/pulls?state=closed&per_page=10`, { headers: ghHeaders() })
+      ]);
+      const opens  = openRes.ok  ? await openRes.json()  : [];
+      const closed = closedRes.ok ? await closedRes.json() : [];
+      const all = [...opens, ...closed];
+      prBadge.textContent = opens.length ? `${opens.length} open` : '0 open';
+      if(!all.length){
+        prList.innerHTML = '<div class="browser-row" style="cursor:default;color:var(--text-dimmer);">Belum ada pull request</div>';
+        return;
+      }
+      prList.innerHTML = all.map(pr => {
+        const isMerged  = pr.merged_at;
+        const state     = isMerged ? 'merged' : pr.state;
+        const date      = new Date(pr.updated_at).toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
+        return `<div class="pr-row" data-url="${pr.html_url}">
+          <span class="pr-num">#${pr.number}</span>
+          <div class="pr-info">
+            <div class="pr-title">${pr.title}</div>
+            <div class="pr-meta">${pr.user.login} · ${date} · ${pr.head.label} → ${pr.base.label}</div>
+          </div>
+          <span class="pr-state ${state}">${state}</span>
+        </div>`;
+      }).join('');
+      prList.querySelectorAll('.pr-row').forEach(row => {
+        row.addEventListener('click', () => window.open(row.dataset.url, '_blank', 'noopener'));
+      });
+    }catch(err){
+      prList.innerHTML = `<div class="browser-row" style="cursor:default;color:var(--red);">Gagal muat PR: ${err.message}</div>`;
+    }
+  }
+
+  prRefreshBtn.addEventListener('click', () => {
+    const repoFull = repoSelect.value;
+    if(repoFull && !repoFull.includes('Memuat')) loadPRs(repoFull);
+  });
 
   // ---------------- Theme ----------------
   (async () => {
@@ -1081,10 +1210,7 @@
       if(!res.ok) throw new Error('Gagal memuat daftar repo');
       let repos = await res.json();
 
-      // Bugfix: a freshly-created repo can take a moment to appear in this list
-      // (GitHub API list endpoints are eventually consistent). If we know about
-      // it already (from the create response), splice it in directly instead
-      // of waiting on a refetch.
+      // Inject repo baru langsung jika belum ada di list (GitHub list API eventually consistent)
       if(injectRepo && !repos.some(r => r.full_name === injectRepo.full_name)){
         repos = [injectRepo, ...repos];
       }
@@ -1109,14 +1235,33 @@
     if(!repoFull || repoFull.includes('Memuat') || repoFull.includes('Error') || repoFull.includes('Tidak ada')){
       branchSelect.innerHTML = '<option>Pilih repo dulu</option>';
       repoBrowser.innerHTML = '<div class="browser-row" style="cursor:default; color:var(--text-dimmer);">Pilih repo untuk lihat isinya</div>';
+      updateRepoInfoBar(null);
+      updateDlBar();
+      prSection.style.display = 'none';
       return;
     }
+    const [owner, repo] = repoFull.split('/');
+    // Fetch metadata untuk info bar
+    try{
+      const metaRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: ghHeaders() });
+      updateRepoInfoBar(metaRes.ok ? await metaRes.json() : null);
+    }catch{ updateRepoInfoBar(null); }
+
     const defaultBranch = repoSelect.selectedOptions[0]?.dataset.branch;
     await loadBranches(repoFull, defaultBranch);
     await browsePath(repoFull, '');
     updateDlBar();
+    loadPRs(repoFull); // non-blocking, load PR paralel
   }
   repoSelect.addEventListener('change', onRepoChange);
+
+  // Fix: ganti branch harus refresh browser repo ke root
+  branchSelect.addEventListener('change', () => {
+    const repoFull = repoSelect.value;
+    if(!repoFull || repoFull.includes('Memuat')) return;
+    closeEditor();
+    browsePath(repoFull, '');
+  });
 
   async function loadBranches(repoFull, selectBranch){
     branchSelect.innerHTML = '<option>Memuat branch…</option>';
@@ -1405,12 +1550,10 @@
     renameConfirmBtn.disabled = true;
     renameConfirmBtn.textContent = 'Memproses…';
     try{
-      // 1. Fetch content of old file
       const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}?ref=${branch}`, { headers: ghHeaders() });
       if(!getRes.ok) throw new Error('Gagal baca file lama');
       const oldData = await getRes.json();
 
-      // 2. Create file at new path
       const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(newPath)}`, {
         method: 'PUT',
         headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
@@ -1422,7 +1565,6 @@
       });
       if(!putRes.ok){ const d = await putRes.json().catch(()=>({})); throw new Error(d.message || 'Gagal buat file baru'); }
 
-      // 3. Delete old file
       const delRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`, {
         method: 'DELETE',
         headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
@@ -1470,6 +1612,55 @@
 
   // Show/hide download bar when repo is selected — defined as hoisted arrow on dlBar ref
   // (called from onRepoChange which runs after dlBar const is assigned)
+
+  // ---------------- Repo info bar (visibility) ----------------
+  let _currentRepoMeta = null; // cache data repo aktif
+
+  function updateRepoInfoBar(repoData){
+    if(!repoData){ repoInfoBar.style.display = 'none'; return; }
+    _currentRepoMeta = repoData;
+    const isPrivate = repoData.private;
+    repoVisIcon.textContent  = isPrivate ? '🔒' : '🌐';
+    repoVisLabel.textContent = isPrivate
+      ? 'Private — hanya kamu yang bisa lihat'
+      : 'Public — siapa saja bisa lihat';
+    repoVisLabel.style.color = isPrivate ? 'var(--text-dim)' : 'var(--green-bright)';
+    repoGhLink.href = repoData.html_url || '#';
+    repoVisToggleBtn.textContent = isPrivate ? 'Jadikan Public' : 'Jadikan Private';
+    repoVisToggleBtn.style.borderColor = isPrivate ? 'var(--green)' : 'var(--amber,#d2991e)';
+    repoVisToggleBtn.style.color       = isPrivate ? 'var(--green-bright)' : 'var(--amber,#d2991e)';
+    repoInfoBar.style.display = 'flex';
+  }
+
+  repoVisToggleBtn.addEventListener('click', async () => {
+    if(!_currentRepoMeta) return;
+    const isPrivate = _currentRepoMeta.private;
+    const action    = isPrivate ? 'publik' : 'privat';
+    if(!confirm(`Jadikan repo ini ${action}? Perubahan ini langsung berlaku di GitHub.`)) return;
+
+    const [owner, repo] = _currentRepoMeta.full_name.split('/');
+    repoVisToggleBtn.disabled     = true;
+    repoVisToggleBtn.textContent  = 'Mengubah…';
+    try{
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+        method: 'PATCH',
+        headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ private: !isPrivate })
+      });
+      if(!res.ok){ const d = await res.json().catch(()=>({})); throw new Error(d.message || 'Gagal ubah visibility'); }
+      const updated = await res.json();
+      _currentRepoMeta = updated;
+      // Update option di dropdown juga
+      const opt = repoSelect.querySelector(`option[value="${updated.full_name}"]`);
+      if(opt) opt.textContent = updated.full_name + (updated.private ? ' 🔒' : '');
+      updateRepoInfoBar(updated);
+      toast(`Repo sekarang ${updated.private ? 'Private 🔒' : 'Public 🌐'}`);
+    }catch(err){
+      toast(err.message, true);
+    }finally{
+      repoVisToggleBtn.disabled = false;
+    }
+  });
 
   // ---------------- Download bar visibility ----------------
   function updateDlBar(){
@@ -1598,27 +1789,29 @@
       toast('Nama repo cuma boleh huruf, angka, tanda strip, titik, underscore', true);
       return;
     }
+    const license   = newRepoLicense.value;
+    const gitignore = newRepoGitignore.value;
     createRepoBtn.disabled = true;
     createRepoBtn.textContent = 'Membuat…';
     try{
+      const body = {
+        name,
+        description: newRepoDesc.value.trim() || undefined,
+        private: newRepoPrivate.checked,
+        auto_init: true,
+        ...(license   ? { license_template:   license   } : {}),
+        ...(gitignore ? { gitignore_template: gitignore } : {})
+      };
       const res = await fetch('https://api.github.com/user/repos', {
         method: 'POST',
         headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          description: newRepoDesc.value.trim() || undefined,
-          private: newRepoPrivate.checked,
-          auto_init: true // creates repo with an initial commit so it has a default branch right away
-        })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
-      if(!res.ok){
-        throw new Error(data.message || 'Gagal membuat repo');
-      }
-      toast('Repo "' + data.full_name + '" dibuat');
-      cancelNewRepoBtn.click(); // reset & hide form
-      // Bugfix: pass the freshly created repo object straight in, so it shows
-      // up immediately even if GitHub's list endpoint hasn't caught up yet.
+      if(!res.ok) throw new Error(data.message || 'Gagal membuat repo');
+      const extras = [license && `lisensi ${license}`, gitignore && `.gitignore ${gitignore}`].filter(Boolean).join(', ');
+      toast(`Repo "${data.full_name}" dibuat${extras ? ' + ' + extras : ''}`);
+      cancelNewRepoBtn.click();
       await loadRepos(data.full_name, data);
     }catch(err){
       toast(err.message, true);
@@ -2050,6 +2243,10 @@
     renderFileList();
     zipTreeWrap.classList.add('hidden');
     toast(`Selesai${skippedCount ? ` (${skippedCount} file di-skip)` : ''}`);
+    // Refresh browser repo agar file baru langsung muncul
+    if(repoFull && !repoFull.includes('Memuat')){
+      browsePath(repoFull, folder || '');
+    }
   });
 
 })();
