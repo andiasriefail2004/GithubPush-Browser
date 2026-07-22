@@ -1280,7 +1280,9 @@
             });
             if(!delRes.ok){ const d = await delRes.json().catch(()=>({})); throw new Error(d.message || 'Gagal hapus'); }
             toast('File dihapus: ' + el.dataset.delpath);
-            browsePath(repoFull, path);
+            // Refresh ke folder parent file yang dihapus, bukan path file itu sendiri
+            const parentPath = el.dataset.delpath.split('/').slice(0, -1).join('/');
+            browsePath(repoFull, parentPath);
           }catch(err){ toast(err.message, true); }
         });
       });
@@ -1515,10 +1517,13 @@
         const content = await fileToBase64(file);
         const path = `${folder}/${file.name}`;
 
-        // Check existing SHA
+        // Cek SHA existing — 404 berarti file baru (normal), bukan error
         let sha;
-        const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${branch}`, { headers: ghHeaders() });
-        if(getRes.ok){ const ex = await getRes.json(); sha = ex.sha; }
+        try{
+          const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${branch}`, { headers: ghHeaders() });
+          if(getRes.ok){ const ex = await getRes.json(); sha = ex.sha; }
+          // 404 → file belum ada, lanjut upload tanpa sha
+        }catch{ /* network error saat cek SHA, lanjut saja */ }
 
         const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`, {
           method: 'PUT',
